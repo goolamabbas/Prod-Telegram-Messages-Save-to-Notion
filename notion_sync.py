@@ -11,18 +11,17 @@ from models import TelegramMessage, SyncStatus, Setting
 logger = logging.getLogger(__name__)
 
 def get_notion_client():
-    """Get Notion client from settings"""
-    setting = Setting.query.filter_by(key="notion_integration_secret").first()
-    if setting and setting.value:
-        return Client(auth=setting.value)
+    """Get Notion client from environment secrets"""
+    import os
+    notion_secret = os.environ.get("NOTION_INTEGRATION_SECRET")
+    if notion_secret:
+        return Client(auth=notion_secret)
     return None
 
 def get_notion_page_id():
-    """Get Notion page ID from settings"""
-    setting = Setting.query.filter_by(key="notion_page_id").first()
-    if setting and setting.value:
-        return setting.value
-    return None
+    """Get Notion page ID from environment secrets"""
+    import os
+    return os.environ.get("NOTION_PAGE_ID")
 
 def create_monthly_database(client, parent_database_id, year, month):
     """Create a new database for the given month"""

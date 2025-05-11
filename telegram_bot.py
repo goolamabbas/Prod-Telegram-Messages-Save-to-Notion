@@ -11,11 +11,9 @@ from models import TelegramMessage, Setting
 logger = logging.getLogger(__name__)
 
 def get_telegram_token():
-    """Get Telegram bot token from settings database"""
-    setting = Setting.query.filter_by(key="telegram_token").first()
-    if setting and setting.value:
-        return setting.value
-    return None
+    """Get Telegram bot token from environment secrets"""
+    import os
+    return os.environ.get("TELEGRAM_BOT_TOKEN")
 
 def setup_telegram_webhook(token, webhook_url):
     """Set up Telegram webhook URL"""

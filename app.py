@@ -142,36 +142,7 @@ def admin():
         now=datetime.now()
     )
 
-@app.route('/admin/settings', methods=['POST'])
-@login_required
-def update_settings():
-    from models import Setting
-    
-    # Get form data
-    telegram_token = request.form.get('telegram_token')
-    notion_secret = request.form.get('notion_integration_secret')
-    notion_page_id = request.form.get('notion_page_id')
-    
-    # Update settings
-    for key, value in {
-        'telegram_token': telegram_token,
-        'notion_integration_secret': notion_secret,
-        'notion_page_id': notion_page_id
-    }.items():
-        if value:  # Only update if value is provided
-            setting = Setting.query.filter_by(key=key).first()
-            if setting:
-                setting.value = value
-            else:
-                new_setting = Setting()
-                new_setting.key = key
-                new_setting.value = value
-                db.session.add(new_setting)
-    
-    db.session.commit()
-    flash('Settings updated successfully')
-    
-    return redirect(url_for('admin'))
+# Settings now managed through Replit Secrets
 
 @app.route('/admin/credentials', methods=['POST'])
 @login_required
