@@ -253,6 +253,7 @@ def sync_messages_to_notion():
             
             # Try to find the daily page
             try:
+                logger.debug(f"Searching for daily page for date: {date.strftime('%Y-%m-%d')} in database: {monthly_db_id}")
                 daily_pages = notion_client.databases.query(
                     database_id=monthly_db_id,
                     filter={
@@ -263,44 +264,64 @@ def sync_messages_to_notion():
                     }
                 )
                 
-                if isinstance(daily_pages, dict) and "results" in daily_pages and daily_pages["results"]:
-                    daily_page_id = daily_pages["results"][0]["id"]
+                if isinstance(daily_pages, dict):
+                    results = daily_pages.get("results", [])
+                    logger.debug(f"Found {len(results)} matching daily pages")
+                    if results:
+                        daily_page_id = results[0]["id"]
+                        logger.debug(f"Using existing daily page: {daily_page_id}")
+                else:
+                    logger.debug(f"Query response is not a dictionary: {type(daily_pages)}")
             except Exception as e:
-                logger.error(f"Error searching for daily page: {str(e)}")
+                logger.error(f"Error searching for daily page: {str(e)}", exc_info=True)
             
             if not daily_page_id:
                 # Create new daily page
+                logger.debug(f"Creating new daily page for date: {date.strftime('%Y-%m-%d')}")
                 daily_page_id = create_daily_page(notion_client, monthly_db_id, date)
+                if daily_page_id:
+                    logger.debug(f"Created new daily page with ID: {daily_page_id}")
+                else:
+                    logger.error("Failed to create daily page")
             
             if not daily_page_id:
                 logger.error(f"Failed to get or create daily page for {date}")
                 continue
             
             # Format messages for Notion
+            logger.debug(f"Formatting {len(messages)} messages for Notion")
             formatted_messages = [format_message_for_notion(message) for message in messages]
             
-            # Update daily page with messages
-            notion_client.blocks.children.append(
-                block_id=daily_page_id,
-                children=formatted_messages
-            )
-            
-            # Update messages count in the daily page
-            notion_client.pages.update(
-                page_id=daily_page_id,
-                properties={
-                    "Messages": {"number": len(messages)},
-                    "Status": {"select": {"name": "Synced"}}
-                }
-            )
-            
-            # Mark messages as synced
-            for message in messages:
-                message.synced = True
-                message.notion_page_id = daily_page_id
-            
-            total_synced += len(messages)
-            logger.info(f"Synced {len(messages)} messages for {date}")
+            try:
+                # Update daily page with messages
+                logger.debug(f"Appending {len(formatted_messages)} message blocks to daily page {daily_page_id}")
+                append_response = notion_client.blocks.children.append(
+                    block_id=daily_page_id,
+                    children=formatted_messages
+                )
+                logger.debug(f"Successfully appended blocks to page")
+                
+                # Update messages count in the daily page
+                logger.debug(f"Updating page properties to show {len(messages)} messages")
+                update_response = notion_client.pages.update(
+                    page_id=daily_page_id,
+                    properties={
+                        "Messages": {"number": len(messages)},
+                        "Status": {"select": {"name": "Synced"}}
+                    }
+                )
+                logger.debug(f"Successfully updated page properties")
+                
+                # Mark messages as synced
+                for message in messages:
+                    message.synced = True
+                    message.notion_page_id = daily_page_id
+                
+                total_synced += len(messages)
+                logger.info(f"Successfully synced {len(messages)} messages for {date}")
+            except Exception as e:
+                logger.error(f"Error syncing messages to daily page: {str(e)}", exc_info=True)
+                continue
         
         # Commit changes to database
         db.session.commit()

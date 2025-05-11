@@ -237,9 +237,19 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form method="POST" action="{{ url_for('trigger_sync') }}">
-                    <button type="submit" class="btn btn-warning">Sync Now</button>
+                <form method="POST" action="{{ url_for('trigger_sync') }}" id="syncForm">
+                    <button type="submit" class="btn btn-warning" id="syncButton">
+                        <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="syncSpinner"></span>
+                        Sync Now
+                    </button>
                 </form>
+                <script>
+                    document.getElementById('syncForm').addEventListener('submit', function() {
+                        document.getElementById('syncSpinner').classList.remove('d-none');
+                        document.getElementById('syncButton').disabled = true;
+                        document.getElementById('syncButton').innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Syncing...';
+                    });
+                </script>
             </div>
         </div>
     </div>
