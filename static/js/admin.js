@@ -8,6 +8,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
+    // Setup webhook button
+    const webhookBtn = document.getElementById('setupWebhookBtn');
+    if (webhookBtn) {
+        webhookBtn.addEventListener('click', setupWebhook);
+    }
+    
     // Fetch stats for charts
     fetchStats();
 });

@@ -56,17 +56,24 @@ with app.app_context():
         db.session.add(admin)
         
         # Create default settings
-        webhook_setting = Setting(key="telegram_webhook_url", value="")
-        token_setting = Setting(key="telegram_token", value="")
-        notion_secret = Setting(key="notion_integration_secret", value="")
-        notion_database = Setting(key="notion_database_id", value="")
+        token_setting = Setting()
+        token_setting.key = "telegram_token"
+        token_setting.value = ""
         
-        db.session.add_all([webhook_setting, token_setting, notion_secret, notion_database])
+        notion_secret = Setting()
+        notion_secret.key = "notion_integration_secret"
+        notion_secret.value = ""
+        
+        notion_page = Setting()
+        notion_page.key = "notion_page_id"
+        notion_page.value = ""
+        
+        db.session.add_all([token_setting, notion_secret, notion_page])
         db.session.commit()
         logger.info("Created admin user and default settings")
 
 # Import route handlers
-from telegram_bot import setup_telegram_webhook, handle_telegram_update
+from telegram_bot import setup_telegram_webhook, handle_telegram_update, get_telegram_token
 from notion_sync import sync_messages_to_notion
 
 # User loader for Flask-Login
@@ -142,35 +149,27 @@ def update_settings():
     
     # Get form data
     telegram_token = request.form.get('telegram_token')
-    telegram_webhook_url = request.form.get('telegram_webhook_url')
     notion_secret = request.form.get('notion_integration_secret')
-    notion_database = request.form.get('notion_database_id')
+    notion_page_id = request.form.get('notion_page_id')
     
     # Update settings
     for key, value in {
         'telegram_token': telegram_token,
-        'telegram_webhook_url': telegram_webhook_url,
         'notion_integration_secret': notion_secret,
-        'notion_database_id': notion_database
+        'notion_page_id': notion_page_id
     }.items():
         if value:  # Only update if value is provided
             setting = Setting.query.filter_by(key=key).first()
             if setting:
                 setting.value = value
             else:
-                setting = Setting(key=key, value=value)
-                db.session.add(setting)
+                new_setting = Setting()
+                new_setting.key = key
+                new_setting.value = value
+                db.session.add(new_setting)
     
     db.session.commit()
     flash('Settings updated successfully')
-    
-    # Update Telegram webhook if URL is provided
-    if telegram_webhook_url and telegram_token:
-        success = setup_telegram_webhook(telegram_token, telegram_webhook_url)
-        if success:
-            flash('Telegram webhook set successfully')
-        else:
-            flash('Failed to set Telegram webhook', 'error')
     
     return redirect(url_for('admin'))
 
@@ -232,6 +231,25 @@ def telegram_webhook():
     update = request.get_json()
     logger.debug(f"Received Telegram update: {update}")
     return handle_telegram_update(update)
+
+@app.route('/api/setup_webhook', methods=['POST'])
+@login_required
+def api_setup_webhook():
+    token = get_telegram_token()
+    if not token:
+        return jsonify({"success": False, "message": "Telegram token not set. Please save your token first."})
+    
+    # Generate webhook URL based on request URL
+    host_url = request.host_url.rstrip('/')
+    webhook_url = f"{host_url}/telegram/webhook"
+    
+    # Setup webhook with Telegram
+    success = setup_telegram_webhook(token, webhook_url)
+    
+    if success:
+        return jsonify({"success": True, "message": f"Webhook set up successfully: {webhook_url}"})
+    else:
+        return jsonify({"success": False, "message": "Failed to set up webhook. Please check your token and try again."})
 
 # Set up background tasks
 scheduler = BackgroundScheduler()

@@ -17,9 +17,9 @@ def get_notion_client():
         return Client(auth=setting.value)
     return None
 
-def get_notion_database_id():
-    """Get Notion database ID from settings"""
-    setting = Setting.query.filter_by(key="notion_database_id").first()
+def get_notion_page_id():
+    """Get Notion page ID from settings"""
+    setting = Setting.query.filter_by(key="notion_page_id").first()
     if setting and setting.value:
         return setting.value
     return None
@@ -111,7 +111,7 @@ def sync_messages_to_notion():
     logger.info("Starting Notion sync...")
     
     notion_client = get_notion_client()
-    parent_page_id = get_notion_database_id()  # This is now a page ID, not a database ID
+    parent_page_id = get_notion_page_id()  # Top level page ID that will contain monthly databases
     
     if not notion_client or not parent_page_id:
         logger.error("Notion client or page ID not configured")

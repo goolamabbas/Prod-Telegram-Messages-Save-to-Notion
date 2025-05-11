@@ -69,9 +69,14 @@
                                 <div class="form-text">Your Telegram bot token from @BotFather</div>
                             </div>
                             <div class="mb-3">
-                                <label for="telegram_webhook_url" class="form-label">Telegram Webhook URL</label>
-                                <input type="text" class="form-control" id="telegram_webhook_url" name="telegram_webhook_url" value="{{ settings.get('telegram_webhook_url', '') }}">
-                                <div class="form-text">The webhook URL for Telegram (e.g., https://yourapp.repl.co/telegram/webhook)</div>
+                                <label class="form-label">Telegram Webhook</label>
+                                <div class="d-grid">
+                                    <button type="button" id="setupWebhookBtn" class="btn btn-secondary">
+                                        <i class="bi bi-link"></i> Setup Webhook Automatically
+                                    </button>
+                                </div>
+                                <div class="form-text">Automatically configure the webhook for your Telegram bot</div>
+                                <div id="webhookStatus" class="mt-2"></div>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -81,9 +86,9 @@
                                 <div class="form-text">Your Notion integration secret from <a href="https://www.notion.so/my-integrations" target="_blank">Notion Integrations</a></div>
                             </div>
                             <div class="mb-3">
-                                <label for="notion_database_id" class="form-label">Notion Database ID</label>
-                                <input type="text" class="form-control" id="notion_database_id" name="notion_database_id" value="{{ settings.get('notion_database_id', '') }}">
-                                <div class="form-text">Your Notion database ID (from the URL: https://www.notion.so/[database-id]?v=...)</div>
+                                <label for="notion_page_id" class="form-label">Notion Page ID</label>
+                                <input type="text" class="form-control" id="notion_page_id" name="notion_page_id" value="{{ settings.get('notion_page_id', '') }}">
+                                <div class="form-text">Your Notion page ID (from the URL: https://www.notion.so/[page-id]?v=...) - this is the top-level page where monthly databases will be created</div>
                             </div>
                         </div>
                     </div>
