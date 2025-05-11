@@ -6,6 +6,9 @@ from flask import jsonify
 import requests
 from app import db
 from models import TelegramMessage, Setting
+# Import the module that causes the "No module named 'replit.object_storage'" error
+# when handle_telegram_update is called
+import storage  # This pre-loads the storage module with all its dependencies
 
 # Initialize logger
 logger = logging.getLogger(__name__)

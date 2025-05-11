@@ -6,28 +6,9 @@ import mimetypes
 import requests
 from urllib.parse import urlparse, quote
 from pathlib import Path
-from replit import db
-from replit.object_storage import Client
 
 # Initialize logger
 logger = logging.getLogger(__name__)
-
-# Initialize Replit Object Storage client
-def get_replit_client():
-    """Get initialized Replit Object Storage client"""
-    try:
-        # Create client for the default bucket 
-        # No credentials needed - Replit handles authentication automatically
-        client = Client()
-        logger.info("Connected to Replit Object Storage")
-        
-        return client
-    except Exception as e:
-        logger.error(f"Error initializing Replit Object Storage client: {str(e)}")
-        return None
-
-# Global Replit Object Storage client
-STORAGE_CLIENT = get_replit_client()
 
 def get_media_type(filename):
     """Determine media type from filename extension"""
@@ -65,7 +46,7 @@ def generate_unique_filename(original_filename):
 
 def save_file_from_url(url, original_filename=None):
     """
-    Download a file from URL and save to Replit Object Storage
+    Download a file from URL and save to local storage
     
     Args:
         url (str): URL of the file to download
@@ -116,37 +97,20 @@ def save_file_from_url(url, original_filename=None):
         file_data.seek(0)
         file_size = file_data.getbuffer().nbytes
         
-        # Define the path in storage
-        object_name = f"media/{unique_filename}"
+        # Store in local storage
+        media_dir = ensure_media_dir()
+        file_path = os.path.join(media_dir, unique_filename)
+        relative_path = os.path.join('media', unique_filename)
         
-        # Determine if we should use Replit Object Storage or local storage
-        if STORAGE_CLIENT:
-            # Upload to Replit Object Storage
+        with open(file_path, 'wb') as f:
             file_data.seek(0)
-            STORAGE_CLIENT.upload_from_bytes(object_name, file_data.read())
-            
-            logger.info(f"File uploaded to Replit Object Storage: {object_name}, size: {file_size} bytes, type: {media_type}")
-            
-            # Store Replit Object Storage path
-            stored_path = f"replit://{object_name}"
-        else:
-            # Fallback to local storage
-            media_dir = ensure_media_dir()
-            file_path = os.path.join(media_dir, unique_filename)
-            relative_path = os.path.join('media', unique_filename)
-            
-            with open(file_path, 'wb') as f:
-                file_data.seek(0)
-                f.write(file_data.read())
-            
-            logger.info(f"File saved to local storage: {file_path}, size: {file_size} bytes, type: {media_type}")
-            
-            # Store local path
-            stored_path = relative_path
+            f.write(file_data.read())
+        
+        logger.info(f"File saved to local storage: {file_path}, size: {file_size} bytes, type: {media_type}")
         
         # Return file metadata
         return {
-            'stored_path': stored_path,
+            'stored_path': relative_path,
             'size': file_size,
             'media_type': media_type,
             'content_type': content_type,
@@ -171,42 +135,14 @@ def get_file_url(stored_path):
     if not stored_path:
         return None
     
-    # Check if this is a Replit Object Storage path
-    if stored_path.startswith('replit://'):
-        # Extract the object name from the path
-        object_name = stored_path.replace('replit://', '')
-        
-        if STORAGE_CLIENT:
-            try:
-                # Make sure the object exists
-                if STORAGE_CLIENT.exists(object_name):
-                    # Get a temporary URL for the file that lasts for 1 hour
-                    # Note: Replit object storage doesn't provide a direct URL function
-                    # So we'll serve it through our Flask app
-                    try:
-                        from flask import url_for
-                        return url_for('serve_media_object', object_name=object_name, _external=True)
-                    except:
-                        # Fallback to relative URL
-                        return f"/media_object/{object_name}"
-                else:
-                    logger.warning(f"Object does not exist: {object_name}")
-                    return None
-            except Exception as e:
-                logger.error(f"Error generating URL: {str(e)}")
-                return None
-        else:
-            logger.warning(f"Replit Object Storage client not available, can't generate URL for {stored_path}")
-            return None
-    else:
-        # Local path, generate URL
-        try:
-            from flask import request
-            base_url = request.host_url.rstrip('/')
-            return f"{base_url}/{stored_path}"
-        except:
-            # Fallback to just the path
-            return f"/{stored_path}"
+    # Local path, generate URL
+    try:
+        from flask import request
+        base_url = request.host_url.rstrip('/')
+        return f"{base_url}/{stored_path}"
+    except:
+        # Fallback to just the path
+        return f"/{stored_path}"
 
 def delete_file(stored_path):
     """
@@ -219,39 +155,17 @@ def delete_file(stored_path):
         bool: True if successful, False otherwise
     """
     try:
-        # Check if this is a Replit Object Storage path
-        if stored_path.startswith('replit://'):
-            # Extract the object name from the path
-            object_name = stored_path.replace('replit://', '')
-            
-            if STORAGE_CLIENT:
-                try:
-                    # Check if the object exists before deleting
-                    if STORAGE_CLIENT.exists(object_name):
-                        STORAGE_CLIENT.delete(object_name)
-                        logger.info(f"Deleted file from Replit Object Storage: {object_name}")
-                        return True
-                    else:
-                        logger.warning(f"Object does not exist: {object_name}")
-                        return False
-                except Exception as e:
-                    logger.error(f"Error deleting object: {str(e)}")
-                    return False
-            else:
-                logger.warning(f"Replit Object Storage client not available, can't delete {stored_path}")
-                return False
+        # Local storage path
+        full_path = os.path.join(os.getcwd(), stored_path)
+        
+        # Check if file exists
+        if os.path.exists(full_path):
+            os.remove(full_path)
+            logger.info(f"Deleted file {full_path}")
+            return True
         else:
-            # Local storage path
-            full_path = os.path.join(os.getcwd(), stored_path)
-            
-            # Check if file exists
-            if os.path.exists(full_path):
-                os.remove(full_path)
-                logger.info(f"Deleted file {full_path}")
-                return True
-            else:
-                logger.warning(f"File not found: {full_path}")
-                return False
+            logger.warning(f"File not found: {full_path}")
+            return False
     except Exception as e:
         logger.error(f"Error deleting file {stored_path}: {str(e)}")
         return False
