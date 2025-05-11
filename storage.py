@@ -6,14 +6,27 @@ import mimetypes
 import requests
 from urllib.parse import urlparse, quote
 from pathlib import Path
-
-# Note: We'll implement Replit Object Storage integration in the future
-# when the technical issues are resolved
+from replit.object_storage import Client
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-# We'll use local storage for now and implement Replit Object Storage in the future
+# Initialize Replit Object Storage client
+def get_replit_client():
+    """Get initialized Replit Object Storage client"""
+    try:
+        # Create a Client instance for Replit Object Storage
+        client = Client()
+        logger.info("Connected to Replit Object Storage")
+        return client
+    except Exception as e:
+        logger.error(f"Error initializing Replit Object Storage: {str(e)}")
+        return None
+
+# Global Replit Object Storage client
+STORAGE_CLIENT = get_replit_client()
+
+# Ensure local media directory exists (as fallback)
 def ensure_media_dir():
     """Ensure the media directory exists"""
     media_dir = os.path.join(os.getcwd(), 'media')
@@ -56,7 +69,7 @@ def generate_unique_filename(original_filename):
 
 def save_file_from_url(url, original_filename=None):
     """
-    Download a file from URL and save to local storage
+    Download a file from URL and save to Replit Object Storage
     
     Args:
         url (str): URL of the file to download
@@ -107,20 +120,37 @@ def save_file_from_url(url, original_filename=None):
         file_data.seek(0)
         file_size = file_data.getbuffer().nbytes
         
-        # Store in local storage
-        media_dir = ensure_media_dir()
-        file_path = os.path.join(media_dir, unique_filename)
-        relative_path = os.path.join('media', unique_filename)
+        # Define object key for storage
+        object_name = f"media/{unique_filename}"
         
-        with open(file_path, 'wb') as f:
+        # Check if we can use Replit Object Storage
+        if STORAGE_CLIENT:
+            # Upload to Replit Object Storage
             file_data.seek(0)
-            f.write(file_data.read())
-        
-        logger.info(f"File saved to local storage: {file_path}, size: {file_size} bytes, type: {media_type}")
+            STORAGE_CLIENT.upload_from_bytes(object_name, file_data.getvalue())
+            
+            logger.info(f"File uploaded to Replit Object Storage: {object_name}, size: {file_size} bytes, type: {media_type}")
+            
+            # Store Replit Object Storage path
+            stored_path = f"replit://{object_name}"
+        else:
+            # Fallback to local storage
+            media_dir = ensure_media_dir()
+            file_path = os.path.join(media_dir, unique_filename)
+            relative_path = os.path.join('media', unique_filename)
+            
+            with open(file_path, 'wb') as f:
+                file_data.seek(0)
+                f.write(file_data.read())
+            
+            logger.info(f"File saved to local storage: {file_path}, size: {file_size} bytes, type: {media_type}")
+            
+            # Store local path
+            stored_path = relative_path
         
         # Return file metadata
         return {
-            'stored_path': relative_path,
+            'stored_path': stored_path,
             'size': file_size,
             'media_type': media_type,
             'content_type': content_type,

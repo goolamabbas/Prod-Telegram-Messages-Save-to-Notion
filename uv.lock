@@ -1492,7 +1492,7 @@ requires-dist = [
     { name = "notion-client", specifier = ">=2.3.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.10" },
     { name = "python-telegram-bot", specifier = ">=22.0" },
-    { name = "replit", specifier = ">=4.1.1" },
+    { name = "replit", specifier = "==4.1.1" },
     { name = "replit-object-storage", specifier = ">=1.0.2" },
     { name = "requests", specifier = ">=2.32.3" },
     { name = "sift-stack-py", specifier = ">=0.5.2" },
