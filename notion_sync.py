@@ -99,12 +99,120 @@ def create_daily_page(client, monthly_database_id, date):
         return None
 
 def format_message_for_notion(message):
-    """Format a Telegram message for Notion with URL detection"""
+    """Format a Telegram message for Notion with URL detection and media handling"""
     import re
     
     timestamp = message.timestamp.strftime("%H:%M:%S")
     username = message.username if message.username else f"{message.first_name} {message.last_name}".strip()
     
+    # Check if this is a media message
+    if message.has_media():
+        # Get media URL
+        media_url = message.get_media_url()
+        
+        # Handle different media types
+        if message.media_type == 'image':
+            # Create an image block for the media
+            image_block = {
+                "object": "block",
+                "type": "image",
+                "image": {
+                    "type": "external",
+                    "external": {"url": media_url}
+                }
+            }
+            
+            # Create a text block for caption/metadata
+            caption_blocks = []
+            
+            # Header with timestamp and username
+            caption_blocks.append({
+                "type": "text", 
+                "text": {"content": f"**{timestamp}** - **{username}** shared an image: "}
+            })
+            
+            # If there's a caption, add it
+            if message.text:
+                # Add URL detection for the caption
+                url_pattern = r'(https?://[^\s]+)'
+                
+                # Check if the text contains URLs
+                if re.search(url_pattern, message.text):
+                    # Split text by URLs
+                    parts = re.split(url_pattern, message.text)
+                    
+                    # Build text blocks with URLs as links
+                    for i, part in enumerate(parts):
+                        if i % 2 == 0:  # Regular text
+                            if part:  # Only add if not empty
+                                caption_blocks.append({
+                                    "type": "text",
+                                    "text": {"content": part}
+                                })
+                        else:  # URL part
+                            caption_blocks.append({
+                                "type": "text",
+                                "text": {
+                                    "content": part,
+                                    "link": {"url": part}
+                                }
+                            })
+                else:
+                    # No URLs, just add the text as is
+                    caption_blocks.append({
+                        "type": "text",
+                        "text": {"content": message.text}
+                    })
+            
+            # Return both blocks (image and caption)
+            return [
+                {
+                    "object": "block",
+                    "type": "paragraph",
+                    "paragraph": {
+                        "rich_text": caption_blocks
+                    }
+                },
+                image_block
+            ]
+            
+        elif message.media_type in ['document', 'video', 'audio']:
+            # For non-image media, create a rich text block with file link
+            media_blocks = []
+            
+            # Header with timestamp and username
+            header_text = f"**{timestamp}** - **{username}** shared a {message.media_type}: "
+            
+            media_blocks.append({
+                "type": "text", 
+                "text": {"content": header_text}
+            })
+            
+            # Add a link to the file
+            media_blocks.append({
+                "type": "text",
+                "text": {
+                    "content": message.media_filename or f"{message.media_type} file",
+                    "link": {"url": media_url}
+                }
+            })
+            
+            # If there's a caption, add it
+            if message.text:
+                media_blocks.append({
+                    "type": "text",
+                    "text": {"content": f" - {message.text}"}
+                })
+            
+            return {
+                "object": "block",
+                "type": "paragraph",
+                "paragraph": {
+                    "rich_text": media_blocks
+                }
+            }
+    
+    # Regular text message handling
     # Header part (timestamp and username)
     header_text = f"**{timestamp}** - **{username}**: "
     
@@ -331,7 +439,16 @@ def sync_messages_to_notion():
             
             # Format messages for Notion
             logger.debug(f"Formatting {len(messages)} messages for Notion")
-            formatted_messages = [format_message_for_notion(message) for message in messages]
+            formatted_messages = []
+            for message in messages:
+                # Get formatted message blocks
+                message_blocks = format_message_for_notion(message)
+                
+                # Handle both single blocks and lists of blocks
+                if isinstance(message_blocks, list):
+                    formatted_messages.extend(message_blocks)
+                else:
+                    formatted_messages.append(message_blocks)
             
             try:
                 # Update daily page with messages
