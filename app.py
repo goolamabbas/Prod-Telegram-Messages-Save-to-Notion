@@ -131,7 +131,37 @@ def serve_media(filename):
     # Serve the file
     return send_from_directory(media_dir, filename)
 
-# Remove the media_object endpoint which is no longer needed
+@app.route('/object-storage/<path:object_name>')
+def serve_object_storage(object_name):
+    """Serve files from Replit Object Storage"""
+    from flask import send_file, abort
+    import io
+    from storage import STORAGE_CLIENT
+    
+    if not STORAGE_CLIENT:
+        abort(500, "Replit Object Storage not available")
+    
+    try:
+        # Download the file data from Object Storage
+        file_data = STORAGE_CLIENT.download_as_bytes(object_name)
+        
+        # Get the content type
+        content_type = None
+        import mimetypes
+        content_type, _ = mimetypes.guess_type(object_name)
+        if not content_type:
+            content_type = 'application/octet-stream'
+        
+        # Return the file data
+        return send_file(
+            io.BytesIO(file_data),
+            mimetype=content_type,
+            as_attachment=False,
+            download_name=os.path.basename(object_name)
+        )
+    except Exception as e:
+        logger.error(f"Error serving object {object_name}: {str(e)}")
+        abort(404, f"File not found: {object_name}")
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():

@@ -46,11 +46,7 @@ def get_media_type(filename):
     else:
         return 'document'
 
-def ensure_media_dir():
-    """Ensure the media directory exists (fallback for local storage)"""
-    media_dir = os.path.join(os.getcwd(), 'media')
-    os.makedirs(media_dir, exist_ok=True)
-    return media_dir
+# This function is duplicated - removed
 
 def generate_unique_filename(original_filename):
     """Generate a unique filename with UUID to avoid collisions"""
@@ -175,14 +171,30 @@ def get_file_url(stored_path):
     if not stored_path:
         return None
     
-    # Local path, generate URL
-    try:
-        from flask import request
-        base_url = request.host_url.rstrip('/')
-        return f"{base_url}/{stored_path}"
-    except:
-        # Fallback to just the path
-        return f"/{stored_path}"
+    # Check if it's a Replit Object Storage path
+    if stored_path.startswith('replit://'):
+        # Extract the object name
+        object_name = stored_path[9:]  # Remove 'replit://' prefix
+        
+        # We need to serve the file from our application
+        # Create a route that will download the file and serve it
+        from flask import url_for
+        try:
+            # The URL will point to our serve_object_storage route
+            # that we'll implement in app.py
+            return url_for('serve_object_storage', object_name=object_name)
+        except Exception as e:
+            logger.error(f"Error creating URL for object {object_name}: {str(e)}")
+            return None
+    else:
+        # Local path, generate URL
+        try:
+            from flask import request
+            base_url = request.host_url.rstrip('/')
+            return f"{base_url}/{stored_path}"
+        except:
+            # Fallback to just the path
+            return f"/{stored_path}"
 
 def delete_file(stored_path):
     """
@@ -195,17 +207,35 @@ def delete_file(stored_path):
         bool: True if successful, False otherwise
     """
     try:
-        # Local storage path
-        full_path = os.path.join(os.getcwd(), stored_path)
-        
-        # Check if file exists
-        if os.path.exists(full_path):
-            os.remove(full_path)
-            logger.info(f"Deleted file {full_path}")
-            return True
+        # Check if it's a Replit Object Storage path
+        if stored_path and stored_path.startswith('replit://'):
+            # Extract the object name
+            object_name = stored_path[9:]  # Remove 'replit://' prefix
+            
+            # Delete from Replit Object Storage
+            if STORAGE_CLIENT:
+                try:
+                    STORAGE_CLIENT.delete(object_name)
+                    logger.info(f"Deleted object {object_name} from Replit Object Storage")
+                    return True
+                except Exception as e:
+                    logger.error(f"Error deleting object {object_name}: {str(e)}")
+                    return False
+            else:
+                logger.error("Replit Object Storage client not available")
+                return False
         else:
-            logger.warning(f"File not found: {full_path}")
-            return False
+            # Local storage path
+            full_path = os.path.join(os.getcwd(), stored_path)
+            
+            # Check if file exists
+            if os.path.exists(full_path):
+                os.remove(full_path)
+                logger.info(f"Deleted file {full_path}")
+                return True
+            else:
+                logger.warning(f"File not found: {full_path}")
+                return False
     except Exception as e:
         logger.error(f"Error deleting file {stored_path}: {str(e)}")
         return False
