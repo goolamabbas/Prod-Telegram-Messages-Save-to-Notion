@@ -7,8 +7,18 @@ import requests
 from urllib.parse import urlparse, quote
 from pathlib import Path
 
+# Note: We'll implement Replit Object Storage integration in the future
+# when the technical issues are resolved
+
 # Initialize logger
 logger = logging.getLogger(__name__)
+
+# We'll use local storage for now and implement Replit Object Storage in the future
+def ensure_media_dir():
+    """Ensure the media directory exists"""
+    media_dir = os.path.join(os.getcwd(), 'media')
+    os.makedirs(media_dir, exist_ok=True)
+    return media_dir
 
 def get_media_type(filename):
     """Determine media type from filename extension"""
