@@ -176,13 +176,11 @@ def get_file_url(stored_path):
         # Extract the object name
         object_name = stored_path[9:]  # Remove 'replit://' prefix
         
-        # We need to serve the file from our application
-        # Create a route that will download the file and serve it
-        from flask import url_for
         try:
-            # The URL will point to our serve_object_storage route
-            # that we'll implement in app.py
-            return url_for('serve_object_storage', object_name=object_name)
+            # Create a direct URL to the serve_object_storage endpoint
+            # This works without Flask context in tests
+            object_name_encoded = quote(object_name)
+            return f"/object-storage/{object_name_encoded}"
         except Exception as e:
             logger.error(f"Error creating URL for object {object_name}: {str(e)}")
             return None
