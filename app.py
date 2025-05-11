@@ -173,6 +173,57 @@ def update_settings():
     
     return redirect(url_for('admin'))
 
+@app.route('/admin/credentials', methods=['POST'])
+@login_required
+def update_admin_credentials():
+    from models import User
+    
+    # Get form data
+    new_username = request.form.get('new_username')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+    
+    # Validate input
+    if not new_username and not new_password:
+        flash('No changes provided', 'warning')
+        return redirect(url_for('admin'))
+    
+    if new_password and new_password != confirm_password:
+        flash('Passwords do not match', 'danger')
+        return redirect(url_for('admin'))
+    
+    # Get the current admin user
+    admin = User.query.filter_by(username='admin').first()
+    if not admin:
+        flash('Admin user not found', 'danger')
+        return redirect(url_for('admin'))
+    
+    # Update username if provided
+    if new_username:
+        # Check if username is already taken by another user
+        existing_user = User.query.filter_by(username=new_username).first()
+        if existing_user and existing_user.id != admin.id:
+            flash(f'Username "{new_username}" is already taken', 'danger')
+            return redirect(url_for('admin'))
+        
+        admin.username = new_username
+    
+    # Update password if provided
+    if new_password:
+        admin.password_hash = generate_password_hash(new_password)
+    
+    # Save changes
+    db.session.commit()
+    flash('Admin credentials updated successfully', 'success')
+    
+    # If the current user changed their own credentials, redirect to login
+    if current_user.id == admin.id:
+        logout_user()
+        flash('Please login with your new credentials', 'info')
+        return redirect(url_for('login'))
+    
+    return redirect(url_for('admin'))
+
 @app.route('/admin/reset_database', methods=['POST'])
 @login_required
 def reset_database():
