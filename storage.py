@@ -1,51 +1,47 @@
 import os
 import uuid
 import logging
+import mimetypes
 import requests
-from datetime import datetime
-from flask import url_for, current_app
+from urllib.parse import urlparse, quote
+from pathlib import Path
 
-# Set up logger
-logger = logging.getLogger('storage')
-if not logger.handlers:
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-    logger.addHandler(console_handler)
-    logger.setLevel(logging.INFO)
-
-# Constants
-MEDIA_DIR = 'media'
-ALLOWED_MEDIA_TYPES = {
-    'image': ['.jpg', '.jpeg', '.png', '.gif', '.webp'],
-    'video': ['.mp4', '.avi', '.mov', '.webm'],
-    'audio': ['.mp3', '.ogg', '.wav', '.m4a'],
-    'document': ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt']
-}
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 def get_media_type(filename):
     """Determine media type from filename extension"""
-    ext = os.path.splitext(filename.lower())[1]
+    extension = os.path.splitext(filename)[1].lower()
     
-    for media_type, extensions in ALLOWED_MEDIA_TYPES.items():
-        if ext in extensions:
-            return media_type
-    
-    return 'document'  # Default to document for unknown types
+    if extension in ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp']:
+        return 'image'
+    elif extension in ['.mp4', '.mov', '.avi', '.webm', '.mkv']:
+        return 'video'
+    elif extension in ['.mp3', '.wav', '.ogg', '.m4a', '.flac']:
+        return 'audio'
+    else:
+        return 'document'
 
 def ensure_media_dir():
     """Ensure the media directory exists"""
-    media_path = os.path.join(os.getcwd(), MEDIA_DIR)
-    if not os.path.exists(media_path):
-        os.makedirs(media_path)
-        logger.info(f"Created media directory: {media_path}")
-    return media_path
+    media_dir = os.path.join(os.getcwd(), 'media')
+    os.makedirs(media_dir, exist_ok=True)
+    return media_dir
 
 def generate_unique_filename(original_filename):
     """Generate a unique filename with UUID to avoid collisions"""
-    # Keep the original extension
-    ext = os.path.splitext(original_filename)[1]
-    # Generate a UUID and use it as filename
-    return f"{uuid.uuid4()}{ext}"
+    if not original_filename:
+        # Default extension if none provided
+        original_filename = "file.bin"
+        
+    # Extract the file extension
+    _, extension = os.path.splitext(original_filename)
+    if not extension:
+        extension = ".bin"  # Default extension if none found
+    
+    # Create a unique filename with UUID and the original extension
+    unique_filename = f"{uuid.uuid4().hex}{extension.lower()}"
+    return unique_filename
 
 def save_file_from_url(url, original_filename=None):
     """
@@ -59,26 +55,45 @@ def save_file_from_url(url, original_filename=None):
         dict: File metadata including stored path, size, etc.
     """
     try:
-        # If no original filename is provided, extract from URL
+        # Ensure media directory exists
+        media_dir = ensure_media_dir()
+        
+        # Try to extract original filename from URL if not provided
         if not original_filename:
-            original_filename = os.path.basename(url)
+            parsed_url = urlparse(url)
+            original_filename = os.path.basename(parsed_url.path)
         
         # Generate unique filename
         unique_filename = generate_unique_filename(original_filename)
         
-        # Ensure media directory exists
-        media_path = ensure_media_dir()
+        # Determine file path
+        file_path = os.path.join(media_dir, unique_filename)
+        relative_path = os.path.join('media', unique_filename)
         
-        # Full path where file will be saved
-        file_path = os.path.join(media_path, unique_filename)
-        
-        # Download file
+        # Download file from URL
         logger.info(f"Downloading file from {url}")
         response = requests.get(url, stream=True)
-        response.raise_for_status()  # Raise exception for HTTP errors
+        response.raise_for_status()
         
-        # Get content type from response headers
-        content_type = response.headers.get('Content-Type', 'application/octet-stream')
+        # Get MIME type
+        content_type = response.headers.get('Content-Type')
+        if not content_type:
+            # Try to guess MIME type from extension
+            content_type, _ = mimetypes.guess_type(original_filename)
+            if not content_type:
+                content_type = 'application/octet-stream'
+        
+        # Determine media type from content type
+        media_type = None
+        if content_type.startswith('image/'):
+            media_type = 'image'
+        elif content_type.startswith('video/'):
+            media_type = 'video'
+        elif content_type.startswith('audio/'):
+            media_type = 'audio'
+        else:
+            # Try to determine from filename
+            media_type = get_media_type(original_filename)
         
         # Save file to disk
         with open(file_path, 'wb') as f:
@@ -88,24 +103,20 @@ def save_file_from_url(url, original_filename=None):
         # Get file size
         file_size = os.path.getsize(file_path)
         
-        # Determine media type
-        media_type = get_media_type(original_filename)
+        logger.info(f"File saved to {file_path}, size: {file_size} bytes, type: {media_type}")
         
-        logger.info(f"Saved file to {file_path} ({file_size} bytes)")
-        
-        # Return metadata
+        # Return file metadata
         return {
-            'stored_path': os.path.join(MEDIA_DIR, unique_filename),
+            'stored_path': relative_path,
+            'size': file_size,
             'media_type': media_type,
             'content_type': content_type,
-            'size': file_size,
             'original_filename': original_filename,
-            'unique_filename': unique_filename,
-            'stored_at': datetime.now().isoformat()
+            'filename': unique_filename
         }
-    
+        
     except Exception as e:
-        logger.error(f"Error saving file from URL: {str(e)}")
+        logger.error(f"Error saving file from URL {url}: {str(e)}")
         return None
 
 def get_file_url(stored_path):
@@ -118,29 +129,17 @@ def get_file_url(stored_path):
     Returns:
         str: The full URL to access the file
     """
-    try:
-        # Get the Replit domain from environment
-        replit_domain = os.environ.get('REPLIT_DOMAIN')
-        
-        if not replit_domain:
-            # If running in development, use the Flask app's URL
-            if current_app:
-                # If we're in a Flask context, use url_for
-                base_url = url_for('index', _external=True)
-                base_url = base_url.rstrip('/')
-            else:
-                # Fallback to localhost
-                base_url = 'http://localhost:5000'
-        else:
-            # Using Replit domain
-            base_url = f"https://{replit_domain}"
-        
-        # Return the complete URL
-        return f"{base_url}/{stored_path}"
-    
-    except Exception as e:
-        logger.error(f"Error generating file URL: {str(e)}")
+    if not stored_path:
         return None
+    
+    # Get server URL from request if possible
+    try:
+        from flask import request
+        base_url = request.host_url.rstrip('/')
+        return f"{base_url}/{stored_path}"
+    except:
+        # Fallback to just the path
+        return f"/{stored_path}"
 
 def delete_file(stored_path):
     """
@@ -153,19 +152,17 @@ def delete_file(stored_path):
         bool: True if successful, False otherwise
     """
     try:
-        # Get absolute path
-        abs_path = os.path.join(os.getcwd(), stored_path)
+        # Get full path
+        full_path = os.path.join(os.getcwd(), stored_path)
         
         # Check if file exists
-        if os.path.exists(abs_path):
-            # Delete the file
-            os.remove(abs_path)
-            logger.info(f"Deleted file: {abs_path}")
+        if os.path.exists(full_path):
+            os.remove(full_path)
+            logger.info(f"Deleted file {full_path}")
             return True
         else:
-            logger.warning(f"File not found for deletion: {abs_path}")
+            logger.warning(f"File not found: {full_path}")
             return False
-    
     except Exception as e:
-        logger.error(f"Error deleting file: {str(e)}")
+        logger.error(f"Error deleting file {stored_path}: {str(e)}")
         return False
