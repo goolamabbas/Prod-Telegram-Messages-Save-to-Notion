@@ -6,6 +6,7 @@ import mimetypes
 import requests
 from urllib.parse import urlparse, quote
 from pathlib import Path
+from replit import db
 from replit.object_storage import Client
 
 # Initialize logger
@@ -218,24 +219,26 @@ def delete_file(stored_path):
         bool: True if successful, False otherwise
     """
     try:
-        # Check if this is a GCS path
-        if stored_path.startswith('gcs://'):
-            # Parse GCS URL
-            parts = stored_path.replace('gcs://', '').split('/', 1)
-            if len(parts) != 2:
-                logger.error(f"Invalid GCS path format: {stored_path}")
-                return False
-                
-            bucket_name = parts[0]
-            blob_name = parts[1]
+        # Check if this is a Replit Object Storage path
+        if stored_path.startswith('replit://'):
+            # Extract the object name from the path
+            object_name = stored_path.replace('replit://', '')
             
-            if GCS_CLIENT:
-                blob = GCS_CLIENT['bucket'].blob(blob_name)
-                blob.delete()
-                logger.info(f"Deleted file from GCS: {stored_path}")
-                return True
+            if STORAGE_CLIENT:
+                try:
+                    # Check if the object exists before deleting
+                    if STORAGE_CLIENT.exists(object_name):
+                        STORAGE_CLIENT.delete(object_name)
+                        logger.info(f"Deleted file from Replit Object Storage: {object_name}")
+                        return True
+                    else:
+                        logger.warning(f"Object does not exist: {object_name}")
+                        return False
+                except Exception as e:
+                    logger.error(f"Error deleting object: {str(e)}")
+                    return False
             else:
-                logger.warning(f"GCS client not available, can't delete {stored_path}")
+                logger.warning(f"Replit Object Storage client not available, can't delete {stored_path}")
                 return False
         else:
             # Local storage path
