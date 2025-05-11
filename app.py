@@ -45,6 +45,37 @@ with app.app_context():
     from models import User, TelegramMessage, SyncStatus, Setting
     db.create_all()
     
+    # Check if media columns exist and add them if needed
+    try:
+        from sqlalchemy import inspect, text
+        
+        # Check if table exists first
+        inspector = inspect(db.engine)
+        if 'telegram_message' in inspector.get_table_names():
+            columns = [col['name'] for col in inspector.get_columns('telegram_message')]
+            
+            if 'media_type' not in columns:
+                print("Adding media columns to TelegramMessage table...")
+                
+                # Add the media columns
+                with db.engine.connect() as conn:
+                    for column_name, column_type in [
+                        ('media_type', 'VARCHAR(20)'),
+                        ('media_file_id', 'VARCHAR(255)'),
+                        ('media_original_url', 'VARCHAR(255)'),
+                        ('media_stored_path', 'VARCHAR(255)'),
+                        ('media_size', 'INTEGER'),
+                        ('media_filename', 'VARCHAR(255)'),
+                        ('media_content_type', 'VARCHAR(100)')
+                    ]:
+                        try:
+                            conn.execute(text(f"ALTER TABLE telegram_message ADD COLUMN {column_name} {column_type}"))
+                            print(f"Added column {column_name}")
+                        except Exception as e:
+                            print(f"Error adding column {column_name}: {e}")
+    except Exception as e:
+        print(f"Error migrating database: {e}")
+    
     # Create admin user if it doesn't exist
     admin = User.query.filter_by(username="admin").first()
     if not admin:
