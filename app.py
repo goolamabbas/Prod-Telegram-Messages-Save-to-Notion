@@ -215,11 +215,24 @@ def reset_database():
 @app.route('/admin/sync_now', methods=['POST'])
 @login_required
 def trigger_sync():
+    import logging
+    logger = logging.getLogger('notion_sync')
+    
+    # Temporarily increase logging level for detailed debug info
+    previous_level = logger.level
+    logger.setLevel(logging.DEBUG)
+    
     try:
+        logger.debug("Manual sync triggered from admin panel")
         sync_messages_to_notion()
         flash('Sync triggered successfully')
     except Exception as e:
-        flash(f'Error triggering sync: {str(e)}', 'error')
+        error_message = str(e)
+        logger.error(f"Sync error: {error_message}", exc_info=True)
+        flash(f'Error triggering sync: {error_message}', 'danger')
+    finally:
+        # Restore previous logging level
+        logger.setLevel(previous_level)
     
     return redirect(url_for('admin'))
 

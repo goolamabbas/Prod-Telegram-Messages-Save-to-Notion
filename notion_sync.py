@@ -8,7 +8,13 @@ from app import db
 from models import TelegramMessage, SyncStatus, Setting
 
 # Initialize logger
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('notion_sync')
+# Set up console handler if not already configured
+if not logger.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.addHandler(console_handler)
+    logger.setLevel(logging.INFO)
 
 def get_notion_client():
     """Get Notion client from environment secrets"""
@@ -112,31 +118,55 @@ def sync_messages_to_notion():
     """Sync unsynced messages to Notion"""
     logger.info("Starting Notion sync...")
     
+    # Get Notion client and parent page ID
     notion_client = get_notion_client()
     parent_page_id = get_notion_page_id()  # Top level page ID that will contain monthly databases
     
+    # Validate Notion client
     if not notion_client:
-        logger.error("Notion client not available - check your NOTION_INTEGRATION_SECRET environment variable")
+        error_msg = "Notion client not available - check your NOTION_INTEGRATION_SECRET environment variable"
+        logger.error(error_msg)
         sync_status = SyncStatus()
         sync_status.messages_synced = 0
         sync_status.success = False
-        sync_status.error_message = "Notion client not available - check your NOTION_INTEGRATION_SECRET environment variable"
+        sync_status.error_message = error_msg
         db.session.add(sync_status)
         db.session.commit()
         return
         
+    # Validate parent page ID
     if not parent_page_id:
-        logger.error("Notion page ID not configured - check your NOTION_PAGE_ID environment variable")
+        error_msg = "Notion page ID not configured - check your NOTION_PAGE_ID environment variable"
+        logger.error(error_msg)
         sync_status = SyncStatus()
         sync_status.messages_synced = 0
         sync_status.success = False
-        sync_status.error_message = "Notion page ID not configured - check your NOTION_PAGE_ID environment variable"
+        sync_status.error_message = error_msg
         db.session.add(sync_status)
         db.session.commit()
         return
         
     # Log debug info
-    logger.info(f"Using Notion page ID: {parent_page_id}")
+    logger.debug(f"Using Notion page ID: {parent_page_id}")
+    
+    # Verify Notion page exists
+    try:
+        logger.debug("Verifying parent page exists...")
+        page_info = notion_client.pages.retrieve(page_id=parent_page_id)
+        if isinstance(page_info, dict):
+            logger.debug(f"Successfully verified parent page: {page_info.get('id')}")
+        else:
+            logger.debug(f"Successfully verified parent page exists (ID: {parent_page_id})")
+    except Exception as e:
+        error_msg = f"Error accessing Notion page with ID {parent_page_id}: {str(e)}"
+        logger.error(error_msg)
+        sync_status = SyncStatus()
+        sync_status.messages_synced = 0
+        sync_status.success = False
+        sync_status.error_message = error_msg
+        db.session.add(sync_status)
+        db.session.commit()
+        return
     
     try:
         # Get unsynced messages
@@ -172,30 +202,46 @@ def sync_messages_to_notion():
             
             # Try to find the monthly database by listing child blocks
             try:
+                # Create the database title to search for
+                month_db_title = f"Messages {month_name} {year}"
+                logger.debug(f"Looking for monthly database: '{month_db_title}'")
+                
                 # First, search for existing monthly databases in the parent page
                 children_response = notion_client.blocks.children.list(block_id=parent_page_id)
+                logger.debug(f"Found {len(children_response.get('results', []))} child blocks in parent page")
                 
                 # Look for child database blocks with matching title
                 children_results = children_response.get("results", []) if isinstance(children_response, dict) else []
                 for block in children_results:
                     if block.get("type") == "child_database":
+                        block_id = block.get("id")
+                        logger.debug(f"Found child database with ID: {block_id}")
+                        
                         # Fetch database details to check title
-                        db_details = notion_client.databases.retrieve(database_id=block["id"])
+                        db_details = notion_client.databases.retrieve(database_id=block_id)
                         db_title = db_details.get("title", []) if isinstance(db_details, dict) else []
+                        
+                        # Extract title text
                         title_parts = []
                         for text in db_title:
                             if isinstance(text, dict) and "text" in text:
                                 title_parts.append(text["text"].get("content", ""))
                         title = "".join(title_parts)
+                        logger.debug(f"Database title: '{title}'")
                         
-                        if title == f"Messages {month_name} {year}":
-                            monthly_db_id = block["id"]
+                        if title == month_db_title:
+                            logger.debug(f"Found matching monthly database with ID: {block_id}")
+                            monthly_db_id = block_id
                             break
+                
+                if not monthly_db_id:
+                    logger.debug(f"No matching monthly database found for '{month_db_title}'")
             except Exception as e:
-                logger.error(f"Error searching for monthly database: {str(e)}")
+                logger.error(f"Error searching for monthly database: {str(e)}", exc_info=True)
             
             # If not found, create new monthly database
             if not monthly_db_id:
+                logger.debug(f"Creating new monthly database for {month_name} {year}")
                 monthly_db_id = create_monthly_database(notion_client, parent_page_id, year, month)
             
             if not monthly_db_id:
