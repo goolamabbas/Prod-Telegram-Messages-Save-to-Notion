@@ -302,9 +302,17 @@ def api_setup_webhook():
     else:
         return jsonify({"success": False, "message": "Failed to set up webhook. Please check your token and try again."})
 
+# Define a wrapper for sync function to use app context
+def sync_messages_job():
+    with app.app_context():
+        try:
+            sync_messages_to_notion()
+        except Exception as e:
+            logger.error(f"Error in scheduled sync job: {str(e)}")
+
 # Set up background tasks
 scheduler = BackgroundScheduler()
-scheduler.add_job(sync_messages_to_notion, 'interval', minutes=5)
+scheduler.add_job(sync_messages_job, 'interval', minutes=5)
 scheduler.start()
 
 # Shutdown scheduler when app stops
