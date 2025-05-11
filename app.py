@@ -88,6 +88,18 @@ def index():
     from datetime import datetime
     return render_template('index.html', now=datetime.now())
 
+@app.route('/media/<path:filename>')
+def serve_media(filename):
+    """Serve media files from storage"""
+    from flask import send_from_directory
+    import os
+    
+    # Construct the full path
+    media_dir = os.path.join(os.getcwd(), 'media')
+    
+    # Serve the file
+    return send_from_directory(media_dir, filename)
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     from datetime import datetime

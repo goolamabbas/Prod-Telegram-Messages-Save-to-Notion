@@ -24,6 +24,15 @@ class TelegramMessage(db.Model):
     synced = db.Column(db.Boolean, default=False)
     notion_page_id = db.Column(db.String(255), nullable=True)
     
+    # New fields for media files
+    media_type = db.Column(db.String(20), nullable=True)  # image, video, audio, document
+    media_file_id = db.Column(db.String(255), nullable=True)  # Telegram file ID
+    media_original_url = db.Column(db.String(255), nullable=True)  # Original Telegram URL
+    media_stored_path = db.Column(db.String(255), nullable=True)  # Path in local storage
+    media_size = db.Column(db.Integer, nullable=True)  # Size in bytes
+    media_filename = db.Column(db.String(255), nullable=True)  # Original filename
+    media_content_type = db.Column(db.String(100), nullable=True)  # MIME type
+    
     def set_message_data(self, message_data):
         self.message_data = json.dumps(message_data)
     
@@ -31,6 +40,18 @@ class TelegramMessage(db.Model):
         if self.message_data:
             return json.loads(self.message_data)
         return None
+        
+    def get_media_url(self):
+        """Get URL for accessing the media file"""
+        from storage import get_file_url
+        
+        if self.media_stored_path:
+            return get_file_url(self.media_stored_path)
+        return None
+    
+    def has_media(self):
+        """Check if the message has media content"""
+        return bool(self.media_type and self.media_stored_path)
 
 class SyncStatus(db.Model):
     id = db.Column(db.Integer, primary_key=True)
