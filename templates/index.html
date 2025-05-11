@@ -1,0 +1,57 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h1 class="h3 mb-0">Telegram to Notion Sync</h1>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <div class="d-flex justify-content-center mb-3">
+                        <i class="bi bi-telegram text-primary" style="font-size: 3rem;"></i>
+                        <i class="bi bi-arrow-right mx-3" style="font-size: 2rem;"></i>
+                        <i class="bi bi-database text-success" style="font-size: 3rem;"></i>
+                        <i class="bi bi-arrow-right mx-3" style="font-size: 2rem;"></i>
+                        <i class="bi bi-file-earmark-text text-info" style="font-size: 3rem;"></i>
+                    </div>
+                    <h2 class="h4">Sync Telegram group messages to Notion databases</h2>
+                </div>
+
+                <div class="mb-4">
+                    <h3 class="h5">Features:</h3>
+                    <ul>
+                        <li>Capture messages from Telegram groups</li>
+                        <li>Store messages securely in PostgreSQL</li>
+                        <li>Sync messages to organized Notion databases</li>
+                        <li>Automatic organization by month and day</li>
+                        <li>Background sync with error handling</li>
+                        <li>Admin interface for monitoring and configuration</li>
+                    </ul>
+                </div>
+
+                <div class="mb-4">
+                    <h3 class="h5">Getting Started:</h3>
+                    <ol>
+                        <li>Log in to the admin panel</li>
+                        <li>Configure your Telegram bot token</li>
+                        <li>Set up your Notion integration</li>
+                        <li>Configure the Telegram webhook URL</li>
+                        <li>Add your bot to Telegram groups</li>
+                        <li>Start capturing and syncing messages!</li>
+                    </ol>
+                </div>
+
+                <div class="text-center">
+                    {% if current_user.is_authenticated %}
+                    <a href="{{ url_for('admin') }}" class="btn btn-primary">Go to Admin Panel</a>
+                    {% else %}
+                    <a href="{{ url_for('login') }}" class="btn btn-primary">Login to Get Started</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
