@@ -99,18 +99,59 @@ def create_daily_page(client, monthly_database_id, date):
         return None
 
 def format_message_for_notion(message):
-    """Format a Telegram message for Notion"""
+    """Format a Telegram message for Notion with URL detection"""
+    import re
+    
     timestamp = message.timestamp.strftime("%H:%M:%S")
     username = message.username if message.username else f"{message.first_name} {message.last_name}".strip()
     
-    # Format full message
-    formatted_text = f"**{timestamp}** - **{username}**: {message.text}"
+    # Header part (timestamp and username)
+    header_text = f"**{timestamp}** - **{username}**: "
+    
+    # Start building rich text blocks
+    rich_text_blocks = [
+        {
+            "type": "text", 
+            "text": {"content": header_text}
+        }
+    ]
+    
+    # URL regex pattern
+    url_pattern = r'(https?://[^\s]+)'
+    
+    # Check if the message contains URLs
+    if re.search(url_pattern, message.text):
+        # Split text by URLs
+        parts = re.split(url_pattern, message.text)
+        
+        # Build rich text blocks with URLs as links
+        for i, part in enumerate(parts):
+            if i % 2 == 0:  # Regular text
+                if part:  # Only add if not empty
+                    rich_text_blocks.append({
+                        "type": "text",
+                        "text": {"content": part}
+                    })
+            else:  # URL part
+                rich_text_blocks.append({
+                    "type": "text",
+                    "text": {
+                        "content": part,
+                        "link": {"url": part}
+                    }
+                })
+    else:
+        # No URLs, just add the text as is
+        rich_text_blocks.append({
+            "type": "text",
+            "text": {"content": message.text}
+        })
     
     return {
         "object": "block",
         "type": "paragraph",
         "paragraph": {
-            "rich_text": [{"type": "text", "text": {"content": formatted_text}}]
+            "rich_text": rich_text_blocks
         }
     }
 
