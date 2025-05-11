@@ -4,63 +4,29 @@ import uuid
 import logging
 import mimetypes
 import requests
-import json
 from urllib.parse import urlparse, quote
 from pathlib import Path
-from google.cloud import storage
-from google.oauth2 import service_account
+from replit.object_storage import Client
 
 # Initialize logger
 logger = logging.getLogger(__name__)
 
-# Google Cloud Storage Configuration
-def get_gcs_client():
-    """Get initialized Google Cloud Storage client with credentials from Replit Secrets"""
+# Initialize Replit Object Storage client
+def get_replit_client():
+    """Get initialized Replit Object Storage client"""
     try:
-        # Get GCP credentials from environment
-        gcp_credentials_json = os.environ.get('REPLIT_GCP_SERVICE_ACCOUNT_KEY')
+        # Create client for the default bucket 
+        # No credentials needed - Replit handles authentication automatically
+        client = Client()
+        logger.info("Connected to Replit Object Storage")
         
-        if not gcp_credentials_json:
-            logger.warning("GCP credentials not found in environment variables, using local storage fallback")
-            return None
-        
-        # Parse JSON credentials
-        try:
-            credentials_info = json.loads(gcp_credentials_json)
-            credentials = service_account.Credentials.from_service_account_info(credentials_info)
-        except json.JSONDecodeError:
-            logger.error("Failed to parse GCP credentials JSON")
-            return None
-        
-        # Initialize GCS client
-        storage_client = storage.Client(credentials=credentials)
-        
-        # Get or create bucket
-        bucket_name = os.environ.get('REPLIT_GCS_BUCKET_NAME', 'telegram-files')
-        
-        # Check if bucket exists, create if not
-        bucket = None
-        try:
-            bucket = storage_client.get_bucket(bucket_name)
-            logger.info(f"Connected to GCS bucket: {bucket_name}")
-        except Exception:
-            logger.info(f"Creating GCS bucket: {bucket_name}")
-            try:
-                bucket = storage_client.create_bucket(bucket_name)
-            except Exception as e:
-                logger.error(f"Error creating GCS bucket: {str(e)}")
-                return None
-                
-        return {
-            'client': storage_client,
-            'bucket': bucket
-        }
+        return client
     except Exception as e:
-        logger.error(f"Error initializing GCS client: {str(e)}")
+        logger.error(f"Error initializing Replit Object Storage client: {str(e)}")
         return None
 
-# Global GCS client
-GCS_CLIENT = get_gcs_client()
+# Global Replit Object Storage client
+STORAGE_CLIENT = get_replit_client()
 
 def get_media_type(filename):
     """Determine media type from filename extension"""
@@ -98,7 +64,7 @@ def generate_unique_filename(original_filename):
 
 def save_file_from_url(url, original_filename=None):
     """
-    Download a file from URL and save to storage
+    Download a file from URL and save to Replit Object Storage
     
     Args:
         url (str): URL of the file to download
@@ -149,24 +115,19 @@ def save_file_from_url(url, original_filename=None):
         file_data.seek(0)
         file_size = file_data.getbuffer().nbytes
         
-        # Determine if we should use GCS or local storage
-        if GCS_CLIENT:
-            # Store in GCS
-            blob_name = f"media/{unique_filename}"
-            blob = GCS_CLIENT['bucket'].blob(blob_name)
-            
-            # Set content type and upload
-            blob.content_type = content_type
+        # Define the path in storage
+        object_name = f"media/{unique_filename}"
+        
+        # Determine if we should use Replit Object Storage or local storage
+        if STORAGE_CLIENT:
+            # Upload to Replit Object Storage
             file_data.seek(0)
-            blob.upload_from_file(file_data)
+            STORAGE_CLIENT.upload_from_bytes(object_name, file_data.read())
             
-            # Make the blob publicly accessible
-            blob.make_public()
+            logger.info(f"File uploaded to Replit Object Storage: {object_name}, size: {file_size} bytes, type: {media_type}")
             
-            logger.info(f"File uploaded to GCS: {blob_name}, size: {file_size} bytes, type: {media_type}")
-            
-            # Store GCS path
-            stored_path = f"gcs://{GCS_CLIENT['bucket'].name}/{blob_name}"
+            # Store Replit Object Storage path
+            stored_path = f"replit://{object_name}"
         else:
             # Fallback to local storage
             media_dir = ensure_media_dir()
@@ -209,28 +170,32 @@ def get_file_url(stored_path):
     if not stored_path:
         return None
     
-    # Check if this is a GCS path
-    if stored_path.startswith('gcs://'):
-        # Parse GCS URL
-        parts = stored_path.replace('gcs://', '').split('/', 1)
-        if len(parts) != 2:
-            logger.error(f"Invalid GCS path format: {stored_path}")
-            return None
-            
-        bucket_name = parts[0]
-        blob_name = parts[1]
+    # Check if this is a Replit Object Storage path
+    if stored_path.startswith('replit://'):
+        # Extract the object name from the path
+        object_name = stored_path.replace('replit://', '')
         
-        if GCS_CLIENT:
-            # Get public URL for the blob
+        if STORAGE_CLIENT:
             try:
-                blob = GCS_CLIENT['bucket'].blob(blob_name)
-                url = blob.public_url
-                return url
+                # Make sure the object exists
+                if STORAGE_CLIENT.exists(object_name):
+                    # Get a temporary URL for the file that lasts for 1 hour
+                    # Note: Replit object storage doesn't provide a direct URL function
+                    # So we'll serve it through our Flask app
+                    try:
+                        from flask import url_for
+                        return url_for('serve_media_object', object_name=object_name, _external=True)
+                    except:
+                        # Fallback to relative URL
+                        return f"/media_object/{object_name}"
+                else:
+                    logger.warning(f"Object does not exist: {object_name}")
+                    return None
             except Exception as e:
-                logger.error(f"Error generating public URL: {str(e)}")
+                logger.error(f"Error generating URL: {str(e)}")
                 return None
         else:
-            logger.warning(f"GCS client not available, can't generate URL for {stored_path}")
+            logger.warning(f"Replit Object Storage client not available, can't generate URL for {stored_path}")
             return None
     else:
         # Local path, generate URL
