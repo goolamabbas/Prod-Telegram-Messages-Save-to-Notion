@@ -301,12 +301,25 @@ def sync_messages_to_notion():
                 )
                 logger.debug(f"Successfully appended blocks to page")
                 
-                # Update messages count in the daily page
-                logger.debug(f"Updating page properties to show {len(messages)} messages")
+                # Get current message count if available
+                current_count = 0
+                try:
+                    page_info = notion_client.pages.retrieve(page_id=daily_page_id)
+                    if isinstance(page_info, dict) and "properties" in page_info:
+                        message_prop = page_info["properties"].get("Messages", {})
+                        if "number" in message_prop and message_prop["number"] is not None:
+                            current_count = message_prop["number"]
+                            logger.debug(f"Current message count: {current_count}")
+                except Exception as e:
+                    logger.warning(f"Could not retrieve current message count: {str(e)}")
+                
+                # Update messages count in the daily page (increment existing count)
+                new_count = current_count + len(messages)
+                logger.debug(f"Updating page properties to show {new_count} messages (added {len(messages)} new)")
                 update_response = notion_client.pages.update(
                     page_id=daily_page_id,
                     properties={
-                        "Messages": {"number": len(messages)},
+                        "Messages": {"number": new_count},
                         "Status": {"select": {"name": "Synced"}}
                     }
                 )
