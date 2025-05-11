@@ -31,3 +31,28 @@ function fetchStats() {
             console.error('Error fetching stats:', error);
         });
 }
+
+// Function to set up Telegram webhook
+function setupWebhook() {
+    const statusDiv = document.getElementById('webhookStatus');
+    statusDiv.innerHTML = '<div class="alert alert-info">Setting up webhook...</div>';
+    
+    fetch('/api/setup_webhook', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+        } else {
+            statusDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+        }
+    })
+    .catch(error => {
+        console.error('Error setting up webhook:', error);
+        statusDiv.innerHTML = '<div class="alert alert-danger">Failed to set up webhook. Check the console for details.</div>';
+    });
+}
