@@ -23,15 +23,18 @@ def get_notion_page_id():
     import os
     return os.environ.get("NOTION_PAGE_ID")
 
-def create_monthly_database(client, parent_database_id, year, month):
+def create_monthly_database(client, parent_page_id, year, month):
     """Create a new database for the given month"""
     month_name = datetime(year, month, 1).strftime("%B")
     title = f"Messages {month_name} {year}"
     
+    # Log the creation attempt
+    logger.info(f"Creating monthly database '{title}' in parent page {parent_page_id}")
+    
     # Create monthly database as a child of main page
     try:
         response = client.databases.create(
-            parent={"page_id": parent_database_id},
+            parent={"page_id": parent_page_id},
             title=[{"type": "text", "text": {"content": title}}],
             properties={
                 "Day": {"title": {}},
@@ -112,15 +115,28 @@ def sync_messages_to_notion():
     notion_client = get_notion_client()
     parent_page_id = get_notion_page_id()  # Top level page ID that will contain monthly databases
     
-    if not notion_client or not parent_page_id:
-        logger.error("Notion client or page ID not configured")
+    if not notion_client:
+        logger.error("Notion client not available - check your NOTION_INTEGRATION_SECRET environment variable")
         sync_status = SyncStatus()
         sync_status.messages_synced = 0
         sync_status.success = False
-        sync_status.error_message = "Notion client or page ID not configured"
+        sync_status.error_message = "Notion client not available - check your NOTION_INTEGRATION_SECRET environment variable"
         db.session.add(sync_status)
         db.session.commit()
         return
+        
+    if not parent_page_id:
+        logger.error("Notion page ID not configured - check your NOTION_PAGE_ID environment variable")
+        sync_status = SyncStatus()
+        sync_status.messages_synced = 0
+        sync_status.success = False
+        sync_status.error_message = "Notion page ID not configured - check your NOTION_PAGE_ID environment variable"
+        db.session.add(sync_status)
+        db.session.commit()
+        return
+        
+    # Log debug info
+    logger.info(f"Using Notion page ID: {parent_page_id}")
     
     try:
         # Get unsynced messages
