@@ -177,10 +177,19 @@ def get_file_url(stored_path):
         object_name = stored_path[9:]  # Remove 'replit://' prefix
         
         try:
-            # Create a direct URL to the serve_object_storage endpoint
-            # This works without Flask context in tests
-            object_name_encoded = quote(object_name)
-            return f"/object-storage/{object_name_encoded}"
+            # For Notion integration, we need a fully qualified URL
+            # First try to get the current host from Flask request context
+            try:
+                from flask import request
+                base_url = request.host_url.rstrip('/')
+                object_name_encoded = quote(object_name)
+                return f"{base_url}/object-storage/{object_name_encoded}"
+            except Exception as e:
+                # If we're outside of a request context, use a direct relative URL
+                # (This won't work for Notion but will work for local display)
+                logger.warning(f"Unable to generate absolute URL: {str(e)}")
+                object_name_encoded = quote(object_name)
+                return f"/object-storage/{object_name_encoded}"
         except Exception as e:
             logger.error(f"Error creating URL for object {object_name}: {str(e)}")
             return None
@@ -190,8 +199,9 @@ def get_file_url(stored_path):
             from flask import request
             base_url = request.host_url.rstrip('/')
             return f"{base_url}/{stored_path}"
-        except:
+        except Exception as e:
             # Fallback to just the path
+            logger.warning(f"Unable to generate absolute URL for local file: {str(e)}")
             return f"/{stored_path}"
 
 def delete_file(stored_path):
