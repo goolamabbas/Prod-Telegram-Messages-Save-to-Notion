@@ -38,6 +38,7 @@ For security, use Replit Secrets to store sensitive credentials. Configure the f
 **Offsite Backup** (AWS S3):
 - `REPLIT_AWS_ACCESS_KEY_ID` - AWS access key
 - `REPLIT_AWS_SECRET_ACCESS_KEY` - AWS secret key
+- `REPLIT_AWS_S3_BUCKET` - AWS S3 bucket name for offsite backups
 
 **Monitoring** (Email notifications):
 - `SMTP_SERVER` - SMTP server (default: smtp.gmail.com)

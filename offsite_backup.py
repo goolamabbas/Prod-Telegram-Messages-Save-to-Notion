@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO,
 logger = logging.getLogger('offsite_backup')
 
 # AWS S3 configuration
-S3_BUCKET_NAME = "your-database-backups-bucket"  # Update with your bucket name
+S3_BUCKET_NAME = os.environ.get("REPLIT_AWS_S3_BUCKET", "")  # Get bucket name from Replit Secrets
 
 def get_aws_credentials():
     """Get AWS credentials from Replit Secrets"""

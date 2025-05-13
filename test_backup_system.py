@@ -129,8 +129,8 @@ def test_aws_s3(backup_info):
     
     # Use a temporary bucket name for testing if not configured
     bucket_name = S3_BUCKET_NAME
-    if not bucket_name or bucket_name == "your-database-backups-bucket":
-        logger.warning("⚠️ S3 bucket name not configured in offsite_backup.py")
+    if not bucket_name:
+        logger.warning("⚠️ S3 bucket name not configured (REPLIT_AWS_S3_BUCKET secret not set)")
         logger.info("Skipping S3 bucket tests, but testing AWS credentials and S3 client setup")
         bucket_name = None
     
@@ -300,8 +300,8 @@ def run_all_tests():
     logger.info(f"Restore Capability: {'✅ Success' if restore_success else '❌ Failed'}")
     
     # If S3 bucket name is not configured, don't consider it a failure
-    if not S3_BUCKET_NAME or S3_BUCKET_NAME == "your-database-backups-bucket":
-        logger.info("Note: S3 bucket tests partially skipped (no bucket configured)")
+    if not S3_BUCKET_NAME:
+        logger.info("Note: S3 bucket tests partially skipped (no bucket configured in REPLIT_AWS_S3_BUCKET secret)")
         overall_success = all([
             backup_info is not None,
             replit_storage_success,

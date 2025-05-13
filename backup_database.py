@@ -34,44 +34,137 @@ def get_db_connection_params():
     }
 
 def create_db_backup():
-    """Create a pg_dump of the database"""
+    """Create a database backup using psycopg2 instead of pg_dump"""
+    import psycopg2
+    import psycopg2.extras
+    import io
+    
     try:
         # Get DB connection parameters
         db_params = get_db_connection_params()
         
-        # Set environment variables for password (more secure than command line)
-        env = os.environ.copy()
-        env["PGPASSWORD"] = db_params["password"]
+        # Create connection string
+        conn_string = f"host={db_params['host']} port={db_params['port']} dbname={db_params['dbname']} user={db_params['user']} password={db_params['password']}"
         
-        # Create dump command
-        dump_cmd = [
-            "pg_dump", 
-            "-h", db_params["host"],
-            "-p", db_params["port"],
-            "-U", db_params["user"],
-            "-d", db_params["dbname"],
-            "-F", "c",  # Custom format (compressed binary)
-        ]
+        # Connect to the database
+        logger.info(f"Creating database backup for {db_params['dbname']} using psycopg2")
+        conn = psycopg2.connect(conn_string)
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         
-        # Execute pg_dump
-        logger.info(f"Creating database backup for {db_params['dbname']}")
-        dump_process = subprocess.Popen(
-            dump_cmd, 
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env
-        )
+        # Get a list of all tables in the current schema
+        cursor.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+            ORDER BY table_name;
+        """)
+        tables = [row[0] for row in cursor.fetchall()]
         
-        # Capture output
-        stdout, stderr = dump_process.communicate()
+        # Create a buffer for the SQL backup
+        sql_buffer = io.StringIO()
         
-        if dump_process.returncode != 0:
-            logger.error(f"Error creating database dump: {stderr.decode('utf-8')}")
-            return None
+        # Write header information
+        sql_buffer.write(f"-- Database: {db_params['dbname']}\n")
+        sql_buffer.write(f"-- Backup Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        sql_buffer.write("-- Backup Method: psycopg2 direct export\n\n")
         
-        # Compress dump with gzip for additional compression
-        compressed_data = gzip.compress(stdout)
+        # For each table, get the schema and data
+        for table_name in tables:
+            sql_buffer.write(f"\n-- Table: {table_name}\n")
+            
+            # Get table schema (create statement)
+            cursor.execute(f"""
+                SELECT 'CREATE TABLE ' || table_name || ' (' ||
+                string_agg(column_definition, ', ') || ');'
+                FROM (
+                    SELECT 
+                        a.attname AS column_name,
+                        pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
+                        CASE 
+                            WHEN a.attnotnull THEN 'NOT NULL'
+                            ELSE 'NULL'
+                        END AS nullable,
+                        CASE 
+                            WHEN pt.contype = 'p' THEN 'PRIMARY KEY'
+                            ELSE ''
+                        END AS key_type,
+                        column_name || ' ' || data_type || 
+                        CASE WHEN nullable = 'NOT NULL' THEN ' NOT NULL' ELSE '' END ||
+                        CASE WHEN key_type = 'PRIMARY KEY' THEN ' PRIMARY KEY' ELSE '' END
+                        AS column_definition
+                    FROM 
+                        pg_catalog.pg_attribute a
+                    LEFT JOIN pg_catalog.pg_class c ON a.attrelid = c.oid
+                    LEFT JOIN (
+                        SELECT 
+                            conrelid,
+                            conkey,
+                            contype
+                        FROM pg_catalog.pg_constraint
+                        WHERE contype = 'p'
+                    ) pt ON a.attrelid = pt.conrelid AND a.attnum = ANY(pt.conkey)
+                    LEFT JOIN information_schema.columns ic ON 
+                        ic.table_schema = 'public' AND 
+                        ic.table_name = c.relname AND 
+                        ic.column_name = a.attname
+                    WHERE 
+                        c.relname = '{table_name}' AND
+                        a.attnum > 0 AND 
+                        NOT a.attisdropped
+                    ORDER BY a.attnum
+                ) t;
+            """)
+            
+            create_table = cursor.fetchone()[0]
+            sql_buffer.write(f"{create_table}\n\n")
+            
+            # Get table data
+            try:
+                cursor.execute(f"SELECT * FROM {table_name};")
+                rows = cursor.fetchall()
+                
+                if rows:
+                    # Get column names
+                    columns = [desc[0] for desc in cursor.description]
+                    columns_str = ', '.join([f'"{col}"' for col in columns])
+                    
+                    # Generate INSERT statements
+                    for row in rows:
+                        values = []
+                        for val in row:
+                            if val is None:
+                                values.append("NULL")
+                            elif isinstance(val, (int, float)):
+                                values.append(str(val))
+                            elif isinstance(val, (datetime, timedelta)):
+                                values.append(f"'{val}'")
+                            elif isinstance(val, (bytes, bytearray)):
+                                # Handle binary data
+                                import binascii
+                                hex_data = binascii.hexlify(val).decode('utf-8')
+                                values.append(f"'\\\\x{hex_data}'")
+                            else:
+                                # Escape string values
+                                val_str = str(val).replace("'", "''")
+                                values.append(f"'{val_str}'")
+                        
+                        values_str = ', '.join(values)
+                        sql_buffer.write(f"INSERT INTO {table_name} ({columns_str}) VALUES ({values_str});\n")
+                    
+                    sql_buffer.write("\n")
+            except Exception as e:
+                logger.warning(f"Error fetching data from table {table_name}: {str(e)}")
+                sql_buffer.write(f"-- Error fetching data: {str(e)}\n\n")
         
+        # Close database connection
+        cursor.close()
+        conn.close()
+        
+        # Get SQL content and compress with gzip
+        sql_content = sql_buffer.getvalue().encode('utf-8')
+        compressed_data = gzip.compress(sql_content)
+        
+        logger.info(f"Database backup completed successfully ({len(compressed_data) / 1024:.2f} KB)")
         return compressed_data
     
     except Exception as e:
