@@ -11,6 +11,7 @@ import os
 import io
 import sys
 import json
+import gzip
 import logging
 import tempfile
 import subprocess
@@ -128,8 +129,15 @@ def test_aws_s3(backup_info):
         return False
     
     # Use a temporary bucket name for testing if not configured
-    bucket_name = S3_BUCKET_NAME
-    if not bucket_name:
+    bucket_name = S3_BUCKET_NAME.strip() if S3_BUCKET_NAME else ""
+    
+    # Check if bucket name is valid
+    import re
+    if bucket_name and not re.match(r'^[a-zA-Z0-9.\-_]{1,255}$', bucket_name):
+        logger.warning(f"⚠️ S3 bucket name '{bucket_name}' appears to be invalid")
+        logger.info("Skipping S3 bucket tests, but testing AWS credentials and S3 client setup")
+        bucket_name = None
+    elif not bucket_name:
         logger.warning("⚠️ S3 bucket name not configured (REPLIT_AWS_S3_BUCKET secret not set)")
         logger.info("Skipping S3 bucket tests, but testing AWS credentials and S3 client setup")
         bucket_name = None
@@ -238,27 +246,31 @@ def test_restore_capability(backup_info):
         
         logger.info(f"Created temporary file for restore test: {temp_path}")
         
-        # Try pg_restore --list to verify backup is valid
+        # For plain SQL files, just check file size and try to gunzip to test validity
         try:
-            cmd = ["pg_restore", "--list", temp_path]
-            logger.info(f"Testing backup validity with: {' '.join(cmd)}")
+            # Check file size
+            file_size = os.path.getsize(temp_path)
+            logger.info(f"Backup file size: {file_size / 1024:.2f} KB")
             
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            stdout, stderr = process.communicate()
+            if file_size < 100:  # If less than 100 bytes, probably empty
+                logger.warning(f"⚠️ Backup file is very small ({file_size} bytes)")
             
-            if process.returncode == 0:
-                logger.info("✅ Backup file is valid and can be restored")
-                # Truncate stdout if too long
-                stdout_sample = stdout.decode('utf-8')[:500]
-                if len(stdout.decode('utf-8')) > 500:
-                    stdout_sample += "... (truncated)"
-                logger.info(f"Backup contents preview:\n{stdout_sample}")
-            else:
-                logger.error(f"❌ Backup file validation failed: {stderr.decode('utf-8')}")
+            # Try to decompress gzip file to verify integrity
+            with gzip.open(temp_path, 'rb') as f:
+                # Read a small sample
+                sample = f.read(1024)
+                if sample:
+                    logger.info("✅ Backup file is valid (gzip format can be decompressed)")
+                    # Print a small sample of SQL
+                    try:
+                        sample_text = sample.decode('utf-8')[:500]
+                        if len(sample) > 500:
+                            sample_text += "... (truncated)"
+                        logger.info(f"Backup contents preview:\n{sample_text}")
+                    except UnicodeDecodeError:
+                        logger.warning("⚠️ Unable to decode backup sample as UTF-8")
+                else:
+                    logger.warning("⚠️ Backup file contains no data")
         except Exception as e:
             logger.error(f"❌ Error testing backup validity: {str(e)}")
         

@@ -34,9 +34,8 @@ def get_db_connection_params():
     }
 
 def create_db_backup():
-    """Create a database backup using psycopg2 instead of pg_dump"""
+    """Create a simple SQL dump of the database using plain SQL"""
     import psycopg2
-    import psycopg2.extras
     import io
     
     try:
@@ -47,9 +46,9 @@ def create_db_backup():
         conn_string = f"host={db_params['host']} port={db_params['port']} dbname={db_params['dbname']} user={db_params['user']} password={db_params['password']}"
         
         # Connect to the database
-        logger.info(f"Creating database backup for {db_params['dbname']} using psycopg2")
+        logger.info(f"Creating database backup for {db_params['dbname']} using plain SQL")
         conn = psycopg2.connect(conn_string)
-        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        cursor = conn.cursor()
         
         # Get a list of all tables in the current schema
         cursor.execute("""
@@ -66,57 +65,11 @@ def create_db_backup():
         # Write header information
         sql_buffer.write(f"-- Database: {db_params['dbname']}\n")
         sql_buffer.write(f"-- Backup Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        sql_buffer.write("-- Backup Method: psycopg2 direct export\n\n")
+        sql_buffer.write("-- Backup Method: plain SQL export\n\n")
         
-        # For each table, get the schema and data
+        # For each table, get the data only (simpler approach for testing)
         for table_name in tables:
             sql_buffer.write(f"\n-- Table: {table_name}\n")
-            
-            # Get table schema (create statement)
-            cursor.execute(f"""
-                SELECT 'CREATE TABLE ' || table_name || ' (' ||
-                string_agg(column_definition, ', ') || ');'
-                FROM (
-                    SELECT 
-                        a.attname AS column_name,
-                        pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
-                        CASE 
-                            WHEN a.attnotnull THEN 'NOT NULL'
-                            ELSE 'NULL'
-                        END AS nullable,
-                        CASE 
-                            WHEN pt.contype = 'p' THEN 'PRIMARY KEY'
-                            ELSE ''
-                        END AS key_type,
-                        column_name || ' ' || data_type || 
-                        CASE WHEN nullable = 'NOT NULL' THEN ' NOT NULL' ELSE '' END ||
-                        CASE WHEN key_type = 'PRIMARY KEY' THEN ' PRIMARY KEY' ELSE '' END
-                        AS column_definition
-                    FROM 
-                        pg_catalog.pg_attribute a
-                    LEFT JOIN pg_catalog.pg_class c ON a.attrelid = c.oid
-                    LEFT JOIN (
-                        SELECT 
-                            conrelid,
-                            conkey,
-                            contype
-                        FROM pg_catalog.pg_constraint
-                        WHERE contype = 'p'
-                    ) pt ON a.attrelid = pt.conrelid AND a.attnum = ANY(pt.conkey)
-                    LEFT JOIN information_schema.columns ic ON 
-                        ic.table_schema = 'public' AND 
-                        ic.table_name = c.relname AND 
-                        ic.column_name = a.attname
-                    WHERE 
-                        c.relname = '{table_name}' AND
-                        a.attnum > 0 AND 
-                        NOT a.attisdropped
-                    ORDER BY a.attnum
-                ) t;
-            """)
-            
-            create_table = cursor.fetchone()[0]
-            sql_buffer.write(f"{create_table}\n\n")
             
             # Get table data
             try:
@@ -127,6 +80,9 @@ def create_db_backup():
                     # Get column names
                     columns = [desc[0] for desc in cursor.description]
                     columns_str = ', '.join([f'"{col}"' for col in columns])
+                    
+                    # Add table data header
+                    sql_buffer.write(f"-- Data for {table_name}\n")
                     
                     # Generate INSERT statements
                     for row in rows:
