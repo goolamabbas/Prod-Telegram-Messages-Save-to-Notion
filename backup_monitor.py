@@ -23,7 +23,7 @@ NOTIFICATION_EMAIL = "your-email@example.com"  # Update with your email address
 BACKUP_LOG_FILE = "backup_log.json"
 
 def get_smtp_config():
-    """Get SMTP configuration from environment variables"""
+    """Get SMTP configuration from Replit Secrets"""
     return {
         "server": os.environ.get("SMTP_SERVER", "smtp.gmail.com"),
         "port": int(os.environ.get("SMTP_PORT", "587")),

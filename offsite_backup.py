@@ -20,7 +20,7 @@ logger = logging.getLogger('offsite_backup')
 S3_BUCKET_NAME = "your-database-backups-bucket"  # Update with your bucket name
 
 def get_aws_credentials():
-    """Get AWS credentials from environment variables"""
+    """Get AWS credentials from Replit Secrets"""
     return {
         "aws_access_key_id": os.environ.get("REPLIT_AWS_ACCESS_KEY_ID", ""),
         "aws_secret_access_key": os.environ.get("REPLIT_AWS_SECRET_ACCESS_KEY", "")

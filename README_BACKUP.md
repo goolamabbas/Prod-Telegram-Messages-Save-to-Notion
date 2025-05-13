@@ -24,9 +24,9 @@ The backup system consists of the following components:
 
 ## Setup Instructions
 
-### 1. Configure Environment Variables
+### 1. Configure Replit Secrets
 
-Ensure the following environment variables are set:
+For security, use Replit Secrets to store sensitive credentials. Configure the following secrets:
 
 **Database Connection** (already configured by Replit):
 - `PGHOST` - PostgreSQL host
@@ -44,6 +44,12 @@ Ensure the following environment variables are set:
 - `SMTP_PORT` - SMTP port (default: 587)
 - `SMTP_USERNAME` - SMTP username
 - `SMTP_PASSWORD` - SMTP password
+
+To add these secrets:
+1. Go to the "Secrets" tab in your Replit workspace
+2. Add each secret key and its corresponding value
+3. Click "Add new secret" for each entry
+4. The secrets will be available as environment variables in your application
 
 ### 2. Set Up the Backup Schedule
 
