@@ -81,16 +81,20 @@ with app.app_context():
         print(f"Error migrating database: {e}")
     
     # Create admin user if it doesn't exist
-    admin = User.query.filter_by(username="admin").first()
-    if not admin:
-        admin = User(
-            username="admin",
-            email="admin@example.com",
-            password_hash=generate_password_hash("admin")  # Default password, should be changed
-        )
-        db.session.add(admin)
-        db.session.commit()
-        logger.info("Created admin user")
+    try:
+        admin = User.query.filter_by(username="admin").first()
+        if not admin:
+            admin = User(
+                username="admin",
+                email="admin@example.com",
+                password_hash=generate_password_hash("admin")  # Default password, should be changed
+            )
+            db.session.add(admin)
+            db.session.commit()
+            logger.info("Created admin user")
+    except Exception as e:
+        logger.warning(f"Error handling admin user: {str(e)}")
+        db.session.rollback()
         
     # Check and create default settings if they don't exist
     default_settings = {
@@ -99,16 +103,20 @@ with app.app_context():
         "notion_page_id": ""
     }
     
-    for key, value in default_settings.items():
-        # Check if setting already exists
-        existing_setting = Setting.query.filter_by(key=key).first()
-        if not existing_setting:
-            new_setting = Setting(key=key, value=value)
-            db.session.add(new_setting)
-            logger.info(f"Created default setting: {key}")
-    
-    # Commit all new settings at once
-    db.session.commit()
+    try:
+        for key, value in default_settings.items():
+            # Check if setting already exists
+            existing_setting = Setting.query.filter_by(key=key).first()
+            if not existing_setting:
+                new_setting = Setting(key=key, value=value)
+                db.session.add(new_setting)
+                logger.info(f"Created default setting: {key}")
+        
+        # Commit all new settings at once
+        db.session.commit()
+    except Exception as e:
+        logger.warning(f"Error handling default settings: {str(e)}")
+        db.session.rollback()
 
 # Import route handlers
 from telegram_bot import setup_telegram_webhook, handle_telegram_update, get_telegram_token

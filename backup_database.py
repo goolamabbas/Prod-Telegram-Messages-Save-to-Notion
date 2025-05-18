@@ -73,7 +73,7 @@ def create_db_backup():
             
             # Get table data
             try:
-                cursor.execute("SELECT * FROM %s", (table_name,))
+                cursor.execute(f'SELECT * FROM "{table_name}"')
                 rows = cursor.fetchall()
                 
                 if rows:
@@ -105,7 +105,7 @@ def create_db_backup():
                                 values.append(f"'{val_str}'")
                         
                         values_str = ', '.join(values)
-                        sql_buffer.write(f"INSERT INTO {table_name} ({columns_str}) VALUES ({values_str});\n")
+                        sql_buffer.write(f'INSERT INTO "{table_name}" ({columns_str}) VALUES ({values_str});\n')
                     
                     sql_buffer.write("\n")
             except Exception as e:
