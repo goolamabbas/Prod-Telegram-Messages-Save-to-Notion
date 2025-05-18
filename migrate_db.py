@@ -38,8 +38,11 @@ def migrate_database():
                         ('media_content_type', 'VARCHAR(100)')
                     ]:
                         try:
-                            # In PostgreSQL we can use the IF NOT EXISTS syntax
-                            conn.execute(text(f"ALTER TABLE telegram_message ADD COLUMN IF NOT EXISTS {column_name} {column_type}"))
+                            # Using parameterized queries to prevent SQL injection
+                            conn.execute(
+                                text("ALTER TABLE telegram_message ADD COLUMN IF NOT EXISTS :column_name :column_type"),
+                                {"column_name": column_name, "column_type": column_type}
+                            )
                             # Some connection objects don't have commit method
                             try:
                                 conn.commit()
