@@ -10,6 +10,7 @@ import gzip
 import logging
 import subprocess
 import tempfile
+import shlex
 from datetime import datetime
 from storage import STORAGE_CLIENT
 
@@ -89,6 +90,12 @@ def restore_database(backup_data, db_params=None):
     if db_params is None:
         db_params = get_db_connection_params()
     
+    # Validate db_params
+    for key in ["host", "port", "user", "dbname"]:
+        if not isinstance(db_params.get(key), str):
+            logger.error(f"Invalid database parameter: {key}")
+            return False
+    
     try:
         # Create a temporary file for the backup
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
@@ -155,10 +162,10 @@ def restore_database(backup_data, db_params=None):
             # Create the database
             create_cmd = [
                 "createdb",
-                "-h", db_params["host"],
-                "-p", db_params["port"],
-                "-U", db_params["user"],
-                db_params["dbname"]
+                "-h", shlex.quote(db_params["host"]),
+                "-p", shlex.quote(db_params["port"]),
+                "-U", shlex.quote(db_params["user"]),
+                shlex.quote(db_params["dbname"])
             ]
             
             logger.info(f"Creating database: {db_params['dbname']}")
@@ -180,14 +187,14 @@ def restore_database(backup_data, db_params=None):
         # Restore the database
         restore_cmd = [
             "pg_restore",
-            "-h", db_params["host"],
-            "-p", db_params["port"],
-            "-U", db_params["user"],
-            "-d", db_params["dbname"],
+            "-h", shlex.quote(db_params["host"]),
+            "-p", shlex.quote(db_params["port"]),
+            "-U", shlex.quote(db_params["user"]),
+            "-d", shlex.quote(db_params["dbname"]),
             "--clean",  # Clean (drop) database objects before recreating
             "--no-owner",  # Don't output commands to set ownership
             "--no-privileges",  # Don't output commands to set privileges
-            temp_path
+            shlex.quote(temp_path)
         ]
         
         logger.info(f"Restoring database: {db_params['dbname']}")
