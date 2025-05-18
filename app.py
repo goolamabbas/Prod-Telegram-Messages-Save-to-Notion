@@ -89,23 +89,26 @@ with app.app_context():
             password_hash=generate_password_hash("admin")  # Default password, should be changed
         )
         db.session.add(admin)
-        
-        # Create default settings
-        token_setting = Setting()
-        token_setting.key = "telegram_token"
-        token_setting.value = ""
-        
-        notion_secret = Setting()
-        notion_secret.key = "notion_integration_secret"
-        notion_secret.value = ""
-        
-        notion_page = Setting()
-        notion_page.key = "notion_page_id"
-        notion_page.value = ""
-        
-        db.session.add_all([token_setting, notion_secret, notion_page])
         db.session.commit()
-        logger.info("Created admin user and default settings")
+        logger.info("Created admin user")
+        
+    # Check and create default settings if they don't exist
+    default_settings = {
+        "telegram_token": "",
+        "notion_integration_secret": "",
+        "notion_page_id": ""
+    }
+    
+    for key, value in default_settings.items():
+        # Check if setting already exists
+        existing_setting = Setting.query.filter_by(key=key).first()
+        if not existing_setting:
+            new_setting = Setting(key=key, value=value)
+            db.session.add(new_setting)
+            logger.info(f"Created default setting: {key}")
+    
+    # Commit all new settings at once
+    db.session.commit()
 
 # Import route handlers
 from telegram_bot import setup_telegram_webhook, handle_telegram_update, get_telegram_token
