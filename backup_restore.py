@@ -101,14 +101,16 @@ def restore_database(backup_data, db_params=None):
         
         # Option 1: Drop connections first (if you have the necessary privileges)
         try:
-            # Create SQL to terminate connections
+            # Create SQL to terminate connections using parameterized query
+            # Using psql with $1 parameter to safely handle the database name
             terminate_cmd = [
                 "psql",
                 "-h", db_params["host"],
                 "-p", db_params["port"],
                 "-U", db_params["user"],
                 "-d", "postgres",  # Connect to postgres db to terminate connections
-                "-c", f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{db_params['dbname']}' AND pid <> pg_backend_pid();"
+                "-c", "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid();",
+                "-v", f"1={db_params['dbname']}"
             ]
             
             logger.info("Terminating existing database connections")
