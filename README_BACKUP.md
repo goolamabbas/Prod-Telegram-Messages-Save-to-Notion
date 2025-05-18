@@ -35,6 +35,9 @@ For security, use Replit Secrets to store sensitive credentials. Configure the f
 - `PGUSER` - PostgreSQL username
 - `PGPASSWORD` - PostgreSQL password
 
+**Replit Object Storage**:
+- `REPLIT_OBJECT_STORAGE` - Needed for storing backups in Replit's cloud storage
+
 **Offsite Backup** (AWS S3):
 - `REPLIT_AWS_ACCESS_KEY_ID` - AWS access key
 - `REPLIT_AWS_SECRET_ACCESS_KEY` - AWS secret key
@@ -123,9 +126,13 @@ If you encounter issues with the backup system:
 
 1. Check the application logs for error messages
 2. Verify that database connection parameters are correct
-3. Ensure Replit Object Storage is accessible
+3. Ensure Replit Object Storage is enabled and accessible
+   - Check that the `REPLIT_OBJECT_STORAGE` secret is properly configured
+   - Run `python test_object_storage_access.py` to verify storage access
 4. Check AWS credentials if offsite backups are failing
-5. Verify SMTP settings if notifications aren't being received
+   - Verify the AWS credentials with `python test_aws_backup.py`
+5. Test the backup and restore cycle with `python test_backup_restore.py`
+6. Verify SMTP settings if notifications aren't being received
 
 ## Manual Backup
 
