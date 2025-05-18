@@ -73,7 +73,7 @@ def create_db_backup():
             
             # Get table data
             try:
-                cursor.execute(f"SELECT * FROM {table_name};")
+                cursor.execute("SELECT * FROM %s", (table_name,))
                 rows = cursor.fetchall()
                 
                 if rows:
