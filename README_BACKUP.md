@@ -157,3 +157,11 @@ python offsite_backup.py
 3. **Review backup logs** - Check for any warnings or errors in the logs
 4. **Keep credentials secure** - Protect your AWS and SMTP credentials
 5. **Update documentation** - Keep this guide updated as you make changes to the backup system
+
+## Security Considerations
+
+1. **Command Injection Protection** - All command-line parameters are properly escaped using `shlex.quote()` to prevent command injection attacks
+2. **Encryption** - AWS S3 data is encrypted at rest by default
+3. **Credentials Management** - All sensitive credentials are stored in Replit Secrets, not in code
+4. **Access Control** - Only authorized users with access to the Replit environment can perform restores
+5. **Validation** - All database parameters are validated before use in backup and restore operations
