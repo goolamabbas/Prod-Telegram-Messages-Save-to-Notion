@@ -69,7 +69,11 @@ with app.app_context():
                         ('media_content_type', 'VARCHAR(100)')
                     ]:
                         try:
-                            conn.execute(text(f"ALTER TABLE telegram_message ADD COLUMN {column_name} {column_type}"))
+                            # Use parameterized query to prevent SQL injection
+                            conn.execute(text("ALTER TABLE telegram_message ADD COLUMN :column_name :column_type").bindparams(
+                                column_name=column_name, 
+                                column_type=column_type
+                            ))
                             print(f"Added column {column_name}")
                         except Exception as e:
                             print(f"Error adding column {column_name}: {e}")
