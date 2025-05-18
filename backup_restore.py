@@ -112,12 +112,12 @@ def restore_database(backup_data, db_params=None):
             # Using psql with $1 parameter to safely handle the database name
             terminate_cmd = [
                 "psql",
-                "-h", db_params["host"],
-                "-p", db_params["port"],
-                "-U", db_params["user"],
+                "-h", shlex.quote(db_params["host"]),
+                "-p", shlex.quote(db_params["port"]),
+                "-U", shlex.quote(db_params["user"]),
                 "-d", "postgres",  # Connect to postgres db to terminate connections
                 "-c", "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid();",
-                "-v", f"1={db_params['dbname']}"
+                "-v", f"1={shlex.quote(db_params['dbname'])}"
             ]
             
             logger.info("Terminating existing database connections")
