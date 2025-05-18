@@ -46,9 +46,19 @@ function setupWebhook() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            statusDiv.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+            const safeMessage = document.createTextNode(data.message);
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-success';
+            alertDiv.appendChild(safeMessage);
+            statusDiv.innerHTML = '';
+            statusDiv.appendChild(alertDiv);
         } else {
-            statusDiv.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+            const safeMessage = document.createTextNode(data.message);
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-danger';
+            alertDiv.appendChild(safeMessage);
+            statusDiv.innerHTML = '';
+            statusDiv.appendChild(alertDiv);
         }
     })
     .catch(error => {
